@@ -25,13 +25,44 @@ class PixabayPage extends StatefulWidget {
 }
 
 class _PixabayPageState extends State<PixabayPage> {
-  List imageList = []; // 初期値は空のListを作成
+  List<PixabayImage> pixabayImages = [];
+  //List imageList = []; // 初期値は空のListを作成
 
   Future<void> fetchImages(String text) async {
-    Response response = await Dio().get(
-        'https://pixabay.com/api/?key=41615545-50f52ae48697ecb24d7316754&q=$text&image_type=photo&pretty=true&per_page=100');
-    imageList = response.data['hits'];
+    final response = await Dio().get(
+      // 'https://pixabay.com/api/?key=41615545-50f52ae48697ecb24d7316754&q=$text&image_type=photo&pretty=true&per_page=100');
+      'https://pixabay.com/api',
+      queryParameters: {
+        'key': '41615545-50f52ae48697ecb24d7316754',
+        'q': text,
+        'image_type': 'photo',
+        'per_page': 100,
+      },
+    );
+    //imageList = response.data['hits'];
+    //この時点で要素の中身の型はMap＜String, dynamic>
+    final List hits = response.data['hits'];
+    //mapメソッドを使って Map<String, dynamic> の型を一つひとつ PixabayImage 型に変換していきます。
+    pixabayImages = hits.map((e) => PixabayImage.fromMap(e)).toList();
+
     setState(() {});
+  }
+
+  Future<void> shareImage(String url) async {
+    final dir = await getTemporaryDirectory();
+    final response = await Dio().get(
+      url,
+      options: Options(
+        responseType: ResponseType.bytes,
+      ),
+    );
+
+    // フォルダの中に image.png という名前でファイルを作り、そこに画像データを書き込みます。
+    final imageFile =
+        await File('${dir.path}/image.png').writeAsBytes(response.data);
+
+    //pathを指定してShare
+    await Share.shareFiles([imageFile.path]);
   }
 
   @override
@@ -61,28 +92,28 @@ class _PixabayPageState extends State<PixabayPage> {
       body: GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3),
-          itemCount: imageList.length,
+          itemCount: pixabayImages.length,
           itemBuilder: (context, index) {
-            Map<String, dynamic> image = imageList[index];
+            final pixabayImage = pixabayImages[index];
             return InkWell(
               onTap: () async {
-                Directory dir = await getTemporaryDirectory();
-                Response response = await Dio().get(image['webformatURL'],
-                    options: Options(
-                      responseType: ResponseType.bytes,
-                    ));
-                File imageFile = await File('${dir.path}/image.png')
-                    .writeAsBytes(response.data);
+                // final dir = await getTemporaryDirectory();
+                // final response = await Dio().get(image['webformatURL'],
+                //     options: Options(
+                //       responseType: ResponseType.bytes,
+                //     ));
+                // final imageFile = await File('${dir.path}/image.png')
+                //     .writeAsBytes(response.data);
 
-                await Share.shareFiles([imageFile.path]);
-
-                //print(image['likes']);
+                // await Share.shareFiles([imageFile.path]);
+                shareImage(pixabayImage.webformatURL);
               },
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   Image.network(
-                    image['previewURL'],
+                    //image['previewURL'],
+                    pixabayImage.previewURL,
                     fit: BoxFit.cover,
                   ),
                   Align(
@@ -96,7 +127,8 @@ class _PixabayPageState extends State<PixabayPage> {
                               Icons.thumb_up_alt_outlined,
                               size: 14,
                             ),
-                            Text(image['likes'].toString()),
+                            //Text(image['likes'].toString()),
+                            Text('${pixabayImage.likes}'),
                           ],
                         )),
                   ),
@@ -104,6 +136,27 @@ class _PixabayPageState extends State<PixabayPage> {
               ),
             );
           }),
+    );
+  }
+}
+
+class PixabayImage {
+  final String previewURL;
+  final int likes;
+  final String webformatURL;
+
+  //PixabayImage(this.previewURL, this.likes, this.webformatURL);}
+  PixabayImage({
+    required this.previewURL,
+    required this.likes,
+    required this.webformatURL,
+  });
+
+  factory PixabayImage.fromMap(Map<String, dynamic> map) {
+    return PixabayImage(
+      previewURL: map['previewURL'],
+      likes: map['likes'],
+      webformatURL: map['webformatURL'],
     );
   }
 }
